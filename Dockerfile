@@ -54,7 +54,7 @@ COPY --from=frontend-builder /app/frontend/dist ./public
 
 # Create data directories owned by the built-in 'node' user (uid 1000, non-root)
 RUN mkdir -p /app/data /app/logs /app/transcode && \
-    chown -R node:node /app
+    chown node:node /app/data /app/logs /app/transcode
 
 USER node
 
