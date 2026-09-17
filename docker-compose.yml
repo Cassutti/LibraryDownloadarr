@@ -9,6 +9,9 @@ services:
       # Server configuration
       - PORT=5069
       - LOG_LEVEL=debug
+      # Public URL - Recommended when running behind a reverse proxy (e.g., Cloudflare, Nginx, Traefik, Caddy)
+      # Sets the canonical origin for Plex OAuth callbacks (e.g. https://your-domain.example)
+      # - PUBLIC_URL=https://your-domain.example
       # Database path (persisted to volume)
       - DATABASE_PATH=/app/data/librarydownloadarr.db
 

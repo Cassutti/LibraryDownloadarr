@@ -84,6 +84,7 @@ services:
       # Server configuration
       - PORT=5069
       - LOG_LEVEL=info
+      # - PUBLIC_URL=https://your-domain.example  # Recommended when behind reverse proxy
       - DATABASE_PATH=/app/data/librarydownloadarr.db
       - TZ=America/New_York  # Change to your timezone
 
@@ -501,6 +502,7 @@ npm run dev
 
 **Production Deployment Checklist:**
 - ✅ Use HTTPS via reverse proxy (nginx, Traefik, Caddy)
+- ✅ Configure `PUBLIC_URL=https://your-domain.example` when behind a reverse proxy for Plex OAuth redirects
 - ✅ Set strong admin password during initial setup (12+ chars with complexity)
 - ✅ Promote a Plex user to admin and disable password login (`ADMIN_LOGIN_ENABLED=false`)
 - ✅ Configure proper Plex server URL (not public if on local network)

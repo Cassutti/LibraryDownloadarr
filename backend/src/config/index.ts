@@ -3,6 +3,7 @@ import path from 'path';
 export const config = {
   server: {
     port: parseInt(process.env.PORT || '5069', 10),
+    publicUrl: process.env.PUBLIC_URL,
   },
   plex: {
     clientIdentifier: 'librarydownloadarr',

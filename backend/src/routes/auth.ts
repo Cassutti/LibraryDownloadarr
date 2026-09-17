@@ -90,6 +90,26 @@ export function getFirstForwardedValue(value: string | string[] | undefined): st
   return first || undefined;
 }
 
+/**
+ * Validate and normalize PUBLIC_URL.
+ * Must be a valid URL with http: or https: protocol. Trailing slashes are stripped.
+ */
+export function normalizePublicUrl(rawUrl?: string): string | undefined {
+  if (!rawUrl || typeof rawUrl !== 'string') return undefined;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return undefined;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return undefined;
+    }
+    const cleanPath = parsed.pathname.replace(/\/+$/, '');
+    return `${parsed.origin}${cleanPath}`;
+  } catch {
+    return undefined;
+  }
+}
+
 export const createAuthRouter = (db: DatabaseService) => {
   const router = Router();
   const authMiddleware = createAuthMiddleware(db);
@@ -376,12 +396,19 @@ export const createAuthRouter = (db: DatabaseService) => {
 
       // Build the callback URL — redirect back to the frontend login page
       // The login page detects the pending auth in localStorage and completes it
-      const rawProto = getFirstForwardedValue(req.headers['x-forwarded-proto'])?.toLowerCase();
-      const protocol = rawProto === 'http' || rawProto === 'https' ? rawProto : (req.protocol === 'https' ? 'https' : 'http');
-      const host =
-        getFirstForwardedValue(req.headers['x-forwarded-host']) ||
-        getFirstForwardedValue(req.headers.host);
-      const callbackUrl = host ? `${protocol}://${host}/login` : '/login';
+      const publicBase = normalizePublicUrl(process.env.PUBLIC_URL);
+      let callbackUrl: string;
+
+      if (publicBase) {
+        callbackUrl = `${publicBase}/login`;
+      } else {
+        const rawProto = getFirstForwardedValue(req.headers['x-forwarded-proto'])?.toLowerCase();
+        const protocol = rawProto === 'http' || rawProto === 'https' ? rawProto : (req.protocol === 'https' ? 'https' : 'http');
+        const host =
+          getFirstForwardedValue(req.headers['x-forwarded-host']) ||
+          getFirstForwardedValue(req.headers.host);
+        callbackUrl = host ? `${protocol}://${host}/login` : '/login';
+      }
 
       return res.json({
         id: pin.id,
