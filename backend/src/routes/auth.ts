@@ -74,6 +74,22 @@ function getClientIp(req: Request): string {
   return req.ip || 'unknown';
 }
 
+/**
+ * Extract the first value from potentially comma-separated or array-based forwarded headers.
+ */
+export function getFirstForwardedValue(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const parsed = getFirstForwardedValue(item);
+      if (parsed) return parsed;
+    }
+    return undefined;
+  }
+  if (typeof value !== 'string') return undefined;
+  const first = value.split(',')[0]?.trim();
+  return first || undefined;
+}
+
 export const createAuthRouter = (db: DatabaseService) => {
   const router = Router();
   const authMiddleware = createAuthMiddleware(db);
@@ -360,8 +376,11 @@ export const createAuthRouter = (db: DatabaseService) => {
 
       // Build the callback URL — redirect back to the frontend login page
       // The login page detects the pending auth in localStorage and completes it
-      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const rawProto = getFirstForwardedValue(req.headers['x-forwarded-proto'])?.toLowerCase();
+      const protocol = rawProto === 'http' || rawProto === 'https' ? rawProto : (req.protocol === 'https' ? 'https' : 'http');
+      const host =
+        getFirstForwardedValue(req.headers['x-forwarded-host']) ||
+        getFirstForwardedValue(req.headers.host);
       const callbackUrl = host ? `${protocol}://${host}/login` : '/login';
 
       return res.json({

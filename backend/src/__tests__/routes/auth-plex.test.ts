@@ -61,6 +61,7 @@ vi.mock('../../services/plexService', () => {
 
 // Import the mocked module to configure per-test
 import { plexService } from '../../services/plexService';
+import { getFirstForwardedValue } from '../../routes/auth';
 const mockedPlex = vi.mocked(plexService);
 
 let app: Express;
@@ -69,6 +70,34 @@ let db: DatabaseService;
 beforeEach(() => {
   ({ app, db } = createTestApp());
   vi.clearAllMocks();
+});
+
+describe('getFirstForwardedValue', () => {
+  it('returns undefined for undefined input', () => {
+    expect(getFirstForwardedValue(undefined)).toBeUndefined();
+  });
+
+  it('returns undefined for empty or whitespace-only strings', () => {
+    expect(getFirstForwardedValue('')).toBeUndefined();
+    expect(getFirstForwardedValue('   ')).toBeUndefined();
+    expect(getFirstForwardedValue(',,,')).toBeUndefined();
+  });
+
+  it('extracts single value and trims whitespace', () => {
+    expect(getFirstForwardedValue('  https  ')).toBe('https');
+  });
+
+  it('extracts first value from comma-separated string', () => {
+    expect(getFirstForwardedValue('https, https')).toBe('https');
+    expect(getFirstForwardedValue('example.com, internal.proxy:8080')).toBe('example.com');
+  });
+
+  it('extracts first value from string array and skips empty entries', () => {
+    expect(getFirstForwardedValue(['https', 'http'])).toBe('https');
+    expect(getFirstForwardedValue(['', '  https  ', 'http'])).toBe('https');
+    expect(getFirstForwardedValue(['example.com, second.com'])).toBe('example.com');
+    expect(getFirstForwardedValue([])).toBeUndefined();
+  });
 });
 
 describe('POST /api/auth/plex/pin', () => {
@@ -88,6 +117,57 @@ describe('POST /api/auth/plex/pin', () => {
     const res = await request(app).post('/api/auth/plex/pin');
     expect(res.status).toBe(500);
     expect(res.body.error).toContain('PIN');
+  });
+
+  it('normalizes single reverse proxy headers in callback URL', async () => {
+    mockedPlex.generatePin.mockResolvedValue(MOCK_PIN);
+
+    const res = await request(app)
+      .post('/api/auth/plex/pin')
+      .set('x-forwarded-proto', 'https')
+      .set('x-forwarded-host', 'plexdownload.cassutti.it');
+
+    expect(res.status).toBe(200);
+    expect(res.body.url).toContain('forwardUrl=https%3A%2F%2Fplexdownload.cassutti.it%2Flogin');
+  });
+
+  it('normalizes comma-separated reverse proxy headers from chained proxies', async () => {
+    mockedPlex.generatePin.mockResolvedValue(MOCK_PIN);
+
+    const res = await request(app)
+      .post('/api/auth/plex/pin')
+      .set('x-forwarded-proto', 'https, https')
+      .set('x-forwarded-host', 'plexdownload.cassutti.it, nginx-proxy:8080');
+
+    expect(res.status).toBe(200);
+    expect(res.body.url).toContain('forwardUrl=https%3A%2F%2Fplexdownload.cassutti.it%2Flogin');
+    expect(res.body.url).not.toContain('https%2C');
+    expect(res.body.url).not.toContain('nginx-proxy');
+  });
+
+  it('handles array-based forwarded headers safely', async () => {
+    mockedPlex.generatePin.mockResolvedValue(MOCK_PIN);
+
+    const res = await request(app)
+      .post('/api/auth/plex/pin')
+      .set('x-forwarded-proto', ['https', 'http'] as any)
+      .set('x-forwarded-host', ['plexdownload.cassutti.it', 'proxy2'] as any);
+
+    expect(res.status).toBe(200);
+    expect(res.body.url).toContain('forwardUrl=https%3A%2F%2Fplexdownload.cassutti.it%2Flogin');
+  });
+
+  it('rejects non-http/https protocols from proxy headers and falls back safely', async () => {
+    mockedPlex.generatePin.mockResolvedValue(MOCK_PIN);
+
+    const res = await request(app)
+      .post('/api/auth/plex/pin')
+      .set('x-forwarded-proto', 'javascript, https')
+      .set('x-forwarded-host', 'plexdownload.cassutti.it');
+
+    expect(res.status).toBe(200);
+    expect(res.body.url).not.toContain('javascript');
+    expect(res.body.url).toMatch(/forwardUrl=https?%3A%2F%2Fplexdownload\.cassutti\.it%2Flogin/);
   });
 });
 
